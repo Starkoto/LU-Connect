@@ -1,19 +1,20 @@
 import socket
 import threading
 
-# Server configuration
-HOST = '0.0.0.0'  # Listen on all network interfaces
-PORT = 12345      # Port number
+HOST = '0.0.0.0' 
+PORT = 12345      
 
-# Create a socket
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.bind((HOST, PORT))
 server_socket.listen(5)
+
+clients = []
 
 print(f"Server listening on {HOST}:{PORT}")
 
 def handle_client(client_socket, client_address):
     print(f"Connection from {client_address} established.")
+    clients.append(client_socket)
     while True:
         try:
             data = client_socket.recv(1024).decode('utf-8')
@@ -21,12 +22,17 @@ def handle_client(client_socket, client_address):
                 break
             print(f"Received from {client_address}: {data}")
             
-            response = f"Server received: {data}"
-            client_socket.sendall(response.encode('utf-8'))
+            for client in clients:
+                if client != client_socket:
+                    try:
+                        client.sendall(data.encode('utf-8'))
+                    except:
+                        clients.remove(client)
         except ConnectionResetError:
             break
     
     print(f"Connection from {client_address} closed.")
+    clients.remove(client_socket)
     client_socket.close()
 
 while True:
