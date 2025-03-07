@@ -10,33 +10,57 @@ server_socket.bind((HOST, PORT))
 server_socket.listen(MAX_CONNECTIONS)
 
 semaphore = threading.Semaphore(MAX_CONNECTIONS)
-clients = []
+clients = {}  # Dictionary to store clients {username: socket}
 
 print(f"Server listening on {HOST}:{PORT}")
 
 def handle_client(client_socket, client_address):
     with semaphore:
-        print(f"Connection from {client_address} established.")
-        clients.append(client_socket)
-        while True:
-            try:
-                data = client_socket.recv(1024).decode('utf-8')
+        try:
+            client_socket.sendall("Enter your username: ".encode('utf-8'))
+            username = client_socket.recv(1024).decode('utf-8').strip()
+            
+            if username in clients:
+                client_socket.sendall("Username already taken. Disconnecting...\n".encode('utf-8'))
+                client_socket.close()
+                return
+
+            clients[username] = client_socket
+            print(f"User '{username}' connected from {client_address}.")
+            client_socket.sendall(f"Welcome, {username}! Type @recipient message to send a message.\n".encode('utf-8'))
+
+            while True:
+                data = client_socket.recv(1024).decode('utf-8').strip()
                 if not data:
                     break
-                print(f"Received from {client_address}: {data}")
-                
-                for client in clients:
-                    if client != client_socket:
+
+                print(f"Received from {username}: {data}")
+
+                if data.startswith("@"):
+                    recipient, message = data.split(" ", 1)
+                    recipient = recipient[1:]
+
+                    if recipient in clients:
                         try:
-                            client.sendall(data.encode('utf-8'))
+                            clients[recipient].sendall(f"From {username}: {message}\n".encode('utf-8'))
                         except:
-                            clients.remove(client)
-            except ConnectionResetError:
-                break
-        
-        print(f"Connection from {client_address} closed.")
-        clients.remove(client_socket)
-        client_socket.close()
+                            del clients[recipient]
+                    else:
+                        client_socket.sendall("Recipient not found.\n".encode('utf-8'))
+                else:
+                    client_socket.sendall("Invalid format. Use @username message.\n".encode('utf-8'))
+
+        except ConnectionResetError:
+            print(f"User '{username}' disconnected unexpectedly.")
+
+        except Exception as e:
+            print(f"Error handling client {client_address}: {e}")
+
+        finally:
+            print(f"Connection from {client_address} closed.")
+            if username in clients:
+                del clients[username]
+            client_socket.close()
 
 while True:
     client_socket, client_address = server_socket.accept()

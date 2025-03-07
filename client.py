@@ -15,7 +15,7 @@ def receive_messages():
             response = client_socket.recv(1024).decode('utf-8')
             if not response:
                 break
-            print(f"\nMessage from other client: {response}")
+            print(f"{response}")
         except:
             break
 
@@ -23,7 +23,7 @@ receive_thread = threading.Thread(target=receive_messages, daemon=True)
 receive_thread.start()
 
 while True:
-    message = input("Enter message: ")
+    message = input()
     if message.lower() == 'exit':
         break
     
