@@ -27,7 +27,7 @@ def handle_client(client_socket, client_address):
 
             clients[username] = client_socket
             print(f"User '{username}' connected from {client_address}.")
-            client_socket.sendall(f"Welcome, {username}! Type @recipient message to send a message.\n".encode('utf-8'))
+            client_socket.sendall(f"Welcome, {username}! Type @recipient message to send a direct message or just type a message to broadcast.\n".encode('utf-8'))
 
             while True:
                 data = client_socket.recv(1024).decode('utf-8').strip()
@@ -37,18 +37,24 @@ def handle_client(client_socket, client_address):
                 print(f"Received from {username}: {data}")
 
                 if data.startswith("@"):
-                    recipient, message = data.split(" ", 1)
-                    recipient = recipient[1:]
+                    try:
+                        recipient, message = data.split(" ", 1)
+                        recipient = recipient[1:]
 
-                    if recipient in clients:
-                        try:
+                        if recipient in clients:
                             clients[recipient].sendall(f"From {username}: {message}\n".encode('utf-8'))
-                        except:
-                            del clients[recipient]
-                    else:
-                        client_socket.sendall("Recipient not found.\n".encode('utf-8'))
+                        else:
+                            client_socket.sendall("Recipient not found.\n".encode('utf-8'))
+                    except ValueError:
+                        client_socket.sendall("Invalid format. Use @username message.\n".encode('utf-8'))
                 else:
-                    client_socket.sendall("Invalid format. Use @username message.\n".encode('utf-8'))
+                    # Broadcast message to all users except sender
+                    for user, client in clients.items():
+                        if user != username:
+                            try:
+                                client.sendall(f"[From {username}]: {data}\n".encode('utf-8'))
+                            except:
+                                del clients[user]
 
         except ConnectionResetError:
             print(f"User '{username}' disconnected unexpectedly.")
@@ -66,3 +72,4 @@ while True:
     client_socket, client_address = server_socket.accept()
     client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address))
     client_thread.start()
+
