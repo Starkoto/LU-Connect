@@ -8,7 +8,7 @@ import winsound
 HOST = '127.0.0.1'
 PORT = 12345
 
-class ChatClient:
+class UI:
     def __init__(self, root):
         self.root = root
         self.root.title("LU-Connect Chat")
@@ -113,5 +113,5 @@ class ChatClient:
 
 
 root = tk.Tk()
-app = ChatClient(root)
+app = UI(root)
 root.mainloop()
