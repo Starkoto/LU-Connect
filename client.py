@@ -15,17 +15,19 @@ class ChatClient:
         self.username = None
         self.client_socket = None
         
-        # Login Frame
-        self.login_frame = tk.Frame(self.root)
-        tk.Label(self.login_frame, text="Username:").pack()
-        self.username_entry = tk.Entry(self.login_frame)
+        # Login/Register Frame
+        self.auth_frame = tk.Frame(self.root)
+        tk.Label(self.auth_frame, text="Username:").pack()
+        self.username_entry = tk.Entry(self.auth_frame)
         self.username_entry.pack()
-        tk.Label(self.login_frame, text="Password:").pack()
-        self.password_entry = tk.Entry(self.login_frame, show="*")
+        tk.Label(self.auth_frame, text="Password:").pack()
+        self.password_entry = tk.Entry(self.auth_frame, show="*")
         self.password_entry.pack()
-        self.login_button = tk.Button(self.login_frame, text="Login", command=self.login)
+        self.login_button = tk.Button(self.auth_frame, text="Login", command=lambda: self.authenticate("login"))
         self.login_button.pack()
-        self.login_frame.pack()
+        self.register_button = tk.Button(self.auth_frame, text="Register", command=lambda: self.authenticate("register"))
+        self.register_button.pack()
+        self.auth_frame.pack()
 
         # Chat Frame (Hidden initially)
         self.chat_frame = tk.Frame(self.root)
@@ -36,7 +38,7 @@ class ChatClient:
         self.send_button = tk.Button(self.chat_frame, text="Send", command=self.send_message)
         self.send_button.pack(side=tk.RIGHT)
         
-    def login(self):
+    def authenticate(self, action):
         username = self.username_entry.get().strip()
         password = self.password_entry.get().strip()
         
@@ -48,20 +50,25 @@ class ChatClient:
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.client_socket.connect((HOST, PORT))
-            self.client_socket.sendall(b"login")
+            self.client_socket.sendall(action.encode())
             self.client_socket.recv(1024)  # Consume response
             self.client_socket.sendall(username.encode())
             self.client_socket.recv(1024)  # Consume response
             self.client_socket.sendall(password.encode())
             response = self.client_socket.recv(1024).decode()
             
-            if "Invalid" in response:
-                messagebox.showerror("Login Failed", response)
+            if "Invalid" in response or "Username already exists" in response:
+                messagebox.showerror("Authentication Failed", response)
+                self.client_socket.close()
+                return
+            
+            if action == "register":
+                messagebox.showinfo("Success", "Registration successful! Please log in.")
                 self.client_socket.close()
                 return
             
             self.username = username
-            self.login_frame.pack_forget()
+            self.auth_frame.pack_forget()
             self.chat_frame.pack()
             threading.Thread(target=self.receive_messages, daemon=True).start()
         except Exception as e:
