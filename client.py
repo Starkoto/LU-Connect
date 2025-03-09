@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import scrolledtext, messagebox
 import socket
 import threading
+import winsound
 
 # Server connection details
 HOST = '127.0.0.1'
@@ -14,6 +15,7 @@ class ChatClient:
 
         self.username = None
         self.client_socket = None
+        self.sound_enabled = True
         
         # Login/Register Frame
         self.auth_frame = tk.Frame(self.root)
@@ -37,6 +39,10 @@ class ChatClient:
         self.message_entry.pack(side=tk.LEFT)
         self.send_button = tk.Button(self.chat_frame, text="Send", command=self.send_message)
         self.send_button.pack(side=tk.RIGHT)
+        
+        # Mute/Unmute Button
+        self.sound_button = tk.Button(self.chat_frame, text="Mute", command=self.toggle_sound)
+        self.sound_button.pack()
         
     def authenticate(self, action):
         username = self.username_entry.get().strip()
@@ -93,10 +99,19 @@ class ChatClient:
                     self.text_area.insert(tk.END, message + "\n")
                     self.text_area.config(state='disabled')
                     self.text_area.yview(tk.END)
+                    self.play_notification()
             except:
                 break
+    
+    def play_notification(self):
+        if self.sound_enabled:
+            winsound.MessageBeep()
+    
+    def toggle_sound(self):
+        self.sound_enabled = not self.sound_enabled
+        self.sound_button.config(text="Unmute" if not self.sound_enabled else "Mute")
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = ChatClient(root)
-    root.mainloop()
+
+root = tk.Tk()
+app = ChatClient(root)
+root.mainloop()
