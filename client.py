@@ -11,20 +11,7 @@ print(client_socket.recv(1024).decode('utf-8'))  # Choose register/login
 choice = input("> ").strip()
 client_socket.sendall(choice.encode('utf-8'))
 
-if choice == "register":
-    print(client_socket.recv(1024).decode('utf-8'))  # Enter username
-    username = input("> ").strip()
-    client_socket.sendall(username.encode('utf-8'))
-
-    print(client_socket.recv(1024).decode('utf-8'))  # Enter password
-    password = input("> ").strip()
-    client_socket.sendall(password.encode('utf-8'))
-
-    print(client_socket.recv(1024).decode('utf-8'))  # Registration result
-    client_socket.close()
-    exit()
-
-elif choice == "login":
+if choice in ["register", "login"]:
     print(client_socket.recv(1024).decode('utf-8'))  # Enter username
     username = input("> ").strip()
     client_socket.sendall(username.encode('utf-8'))
@@ -36,10 +23,9 @@ elif choice == "login":
     response = client_socket.recv(1024).decode('utf-8')
     print(response)
 
-    if "Invalid" in response:
+    if "Invalid" in response or "exists" in response:
         client_socket.close()
         exit()
-
 else:
     client_socket.close()
     exit()
