@@ -2,6 +2,7 @@ import socket
 import threading
 import sqlite3
 import bcrypt
+from datetime import datetime
 
 HOST = '0.0.0.0'
 PORT = 12345
@@ -144,6 +145,7 @@ def handle_client(client_socket, client_address):
                 if not data:
                     break
 
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 print(f"Received from {username}: {data}")
 
                 if data.startswith("@"):
@@ -152,7 +154,7 @@ def handle_client(client_socket, client_address):
                         recipient = recipient[1:]
 
                         if recipient in clients:
-                            clients[recipient].sendall(f"From {username}: {message}\n".encode('utf-8'))
+                            clients[recipient].sendall(f"[{timestamp}] {username}: {message}\n".encode('utf-8'))
                             save_message(username, recipient, message)
                         else:
                             client_socket.sendall("Recipient not found.\n".encode('utf-8'))
@@ -162,7 +164,7 @@ def handle_client(client_socket, client_address):
                     for user, client in clients.items():
                         if user != username:
                             try:
-                                client.sendall(f"[From {username}]: {data}\n".encode('utf-8'))
+                                client.sendall(f"[{timestamp}] {username}: {data}\n".encode('utf-8'))
                             except:
                                 del clients[user]
                     

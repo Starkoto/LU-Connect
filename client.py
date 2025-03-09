@@ -1,5 +1,6 @@
 import socket
 import threading
+from datetime import datetime
 
 HOST = '127.0.0.1'
 PORT = 12345
@@ -48,9 +49,8 @@ def receive_messages():
     while True:
         try:
             response = client_socket.recv(1024).decode('utf-8')
-            if not response:
-                break
-            print(f"{response}")
+            if response.strip():
+                print(response)
         except:
             break
 
