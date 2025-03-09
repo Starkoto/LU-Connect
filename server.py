@@ -14,22 +14,35 @@ server_socket.listen(MAX_CONNECTIONS)
 semaphore = threading.Semaphore(MAX_CONNECTIONS)
 clients = {}  # {username: socket}
 
+# Initialize the database
 def init_db():
-    conn = sqlite3.connect("users.db")
+    conn = sqlite3.connect("messages.db")
     cursor = conn.cursor()
+
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password BLOB NOT NULL
     )''')
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sender TEXT NOT NULL,
+        recipient TEXT NOT NULL,
+        message TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )''')
+
     conn.commit()
     conn.close()
 
 init_db()
 
+# Function to register a user
 def register_user(username, password):
-    conn = sqlite3.connect("users.db")
+    conn = sqlite3.connect("messages.db")
     cursor = conn.cursor()
 
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
@@ -43,8 +56,9 @@ def register_user(username, password):
         conn.close()
         return False  # Username exists
 
+# Function to authenticate a user
 def authenticate_user(username, password):
-    conn = sqlite3.connect("users.db")
+    conn = sqlite3.connect("messages.db")
     cursor = conn.cursor()
 
     cursor.execute("SELECT password FROM users WHERE username = ?", (username,))
@@ -54,6 +68,30 @@ def authenticate_user(username, password):
     if user and bcrypt.checkpw(password.encode('utf-8'), user[0]):
         return True  # Valid login
     return False  # Invalid credentials
+
+def save_message(sender, recipient, message):
+    conn = sqlite3.connect("messages.db")
+    cursor = conn.cursor()
+    
+    cursor.execute("INSERT INTO messages (sender, recipient, message) VALUES (?, ?, ?)", 
+                   (sender, recipient, message))
+    
+    conn.commit()
+    conn.close()
+
+def get_user_messages(username):
+    conn = sqlite3.connect("messages.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT sender, message, timestamp FROM messages
+        WHERE recipient = ? OR recipient = 'ALL'
+        ORDER BY timestamp DESC LIMIT 10
+    """, (username,))
+
+    messages = cursor.fetchall()
+    conn.close()
+    return messages
 
 def handle_client(client_socket, client_address):
     with semaphore:
@@ -83,7 +121,13 @@ def handle_client(client_socket, client_address):
                 password = client_socket.recv(1024).decode('utf-8').strip()
 
                 if authenticate_user(username, password):
-                    client_socket.sendall(f"Welcome, {username}! Type @recipient message to send a DM.\n".encode('utf-8'))
+                    client_socket.sendall(f"Welcome, {username}! Loading chat history...\n".encode('utf-8'))
+
+                    messages = get_user_messages(username)
+                    for sender, message, timestamp in reversed(messages):
+                        client_socket.sendall(f"[{timestamp}] {sender}: {message}\n".encode('utf-8'))
+
+                    client_socket.sendall("Type @recipient message to send a DM, or type normally to broadcast.\n".encode('utf-8'))
                     clients[username] = client_socket
                     print(f"User '{username}' connected from {client_address}.")
                 else:
@@ -109,6 +153,7 @@ def handle_client(client_socket, client_address):
 
                         if recipient in clients:
                             clients[recipient].sendall(f"From {username}: {message}\n".encode('utf-8'))
+                            save_message(username, recipient, message)
                         else:
                             client_socket.sendall("Recipient not found.\n".encode('utf-8'))
                     except ValueError:
@@ -120,6 +165,8 @@ def handle_client(client_socket, client_address):
                                 client.sendall(f"[From {username}]: {data}\n".encode('utf-8'))
                             except:
                                 del clients[user]
+                    
+                    save_message(username, "ALL", data)
 
         except ConnectionResetError:
             print(f"User '{username}' disconnected unexpectedly.")
@@ -137,4 +184,3 @@ while True:
     client_socket, client_address = server_socket.accept()
     client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address))
     client_thread.start()
-
