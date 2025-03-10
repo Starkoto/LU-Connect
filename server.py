@@ -4,6 +4,7 @@ import sqlite3
 import bcrypt
 from datetime import datetime
 import time
+from cryptography.fernet import Fernet  # New: Import Fernet for encryption
 
 HOST = '0.0.0.0'
 PORT = 12345
@@ -18,6 +19,10 @@ clients = {}  # {username: socket}
 
 waiting_queue = []
 waiting_lock = threading.Lock()
+
+# New: Generate an encryption key and create a cipher object.
+ENCRYPTION_KEY = Fernet.generate_key()
+cipher_suite = Fernet(ENCRYPTION_KEY)
 
 # Initialize the database
 def init_db():
@@ -73,11 +78,13 @@ def authenticate_user(username, password):
     return False  # Invalid credentials
 
 def save_message(sender, recipient, message):
+    # New: Encrypt the message before storing it in the database.
+    encrypted_message = cipher_suite.encrypt(message.encode('utf-8')).decode('utf-8')
     conn = sqlite3.connect("messages.db")
     cursor = conn.cursor()
     
     cursor.execute("INSERT INTO messages (sender, recipient, message) VALUES (?, ?, ?)", 
-                   (sender, recipient, message))
+                   (sender, recipient, encrypted_message))
     
     conn.commit()
     conn.close()
@@ -94,7 +101,15 @@ def get_user_messages(username):
 
     messages = cursor.fetchall()
     conn.close()
-    return messages
+    # New: Decrypt messages before returning them.
+    decrypted_messages = []
+    for sender, encrypted_message, timestamp in messages:
+        try:
+            decrypted_text = cipher_suite.decrypt(encrypted_message.encode('utf-8')).decode('utf-8')
+        except Exception:
+            decrypted_text = "[Error decrypting message]"
+        decrypted_messages.append((sender, decrypted_text, timestamp))
+    return decrypted_messages
 
 def handle_client(client_socket, client_address):
     username = None
