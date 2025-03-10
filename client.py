@@ -52,14 +52,13 @@ class UI:
             messagebox.showerror("Error", "Please enter both username and password")
             return
 
-        # Connect to server
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.client_socket.connect((HOST, PORT))
             self.client_socket.sendall(action.encode())
-            self.client_socket.recv(1024)  # Consume response
+            self.client_socket.recv(1024)  
             self.client_socket.sendall(username.encode())
-            self.client_socket.recv(1024)  # Consume response
+            self.client_socket.recv(1024) 
             self.client_socket.sendall(password.encode())
             response = self.client_socket.recv(1024).decode()
             
@@ -76,6 +75,8 @@ class UI:
             self.username = username
             self.auth_frame.pack_forget()
             self.chat_frame.pack()
+            if "in the queue" in response:
+                self.message_entry.config(state='disabled')
             threading.Thread(target=self.receive_messages, daemon=True).start()
         except Exception as e:
             messagebox.showerror("Connection Error", str(e))
@@ -100,6 +101,11 @@ class UI:
                     self.text_area.config(state='disabled')
                     self.text_area.yview(tk.END)
                     self.play_notification()
+                    
+                    if "in the queue" in message:
+                        self.message_entry.config(state='disabled')
+                    if "It's your turn" in message:
+                        self.message_entry.config(state='normal')
             except:
                 break
     
