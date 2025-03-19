@@ -4,7 +4,7 @@ import sqlite3
 import bcrypt
 from datetime import datetime
 import time
-from cryptography.fernet import Fernet  # New: Import Fernet for encryption
+from cryptography.fernet import Fernet
 
 HOST = '0.0.0.0'
 PORT = 12345
@@ -16,11 +16,10 @@ server_socket.listen()  # Allow more than MAX_CONNECTIONS to connect
 
 semaphore = threading.Semaphore(MAX_CONNECTIONS)
 clients = {}  # {username: socket}
-
 waiting_queue = []
 waiting_lock = threading.Lock()
 
-# New: Generate an encryption key and create a cipher object.
+# Generate an encryption key and create a cipher object.
 ENCRYPTION_KEY = Fernet.generate_key()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
@@ -28,14 +27,12 @@ cipher_suite = Fernet(ENCRYPTION_KEY)
 def init_db():
     conn = sqlite3.connect("messages.db")
     cursor = conn.cursor()
-
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE NOT NULL,
         password BLOB NOT NULL
     )''')
-
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +41,6 @@ def init_db():
         message TEXT NOT NULL,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )''')
-
     conn.commit()
     conn.close()
 
@@ -53,55 +49,47 @@ init_db()
 def register_user(username, password):
     conn = sqlite3.connect("messages.db")
     cursor = conn.cursor()
-
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
     try:
         cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
         conn.commit()
         conn.close()
-        return True  # Success
+        return True
     except sqlite3.IntegrityError:
         conn.close()
-        return False  # Username exists
+        return False
 
 def authenticate_user(username, password):
     conn = sqlite3.connect("messages.db")
     cursor = conn.cursor()
-
     cursor.execute("SELECT password FROM users WHERE username = ?", (username,))
     user = cursor.fetchone()
     conn.close()
-
     if user and bcrypt.checkpw(password.encode('utf-8'), user[0]):
-        return True  # Valid login
-    return False  # Invalid credentials
+        return True
+    return False
 
 def save_message(sender, recipient, message):
-    # New: Encrypt the message before storing it in the database.
+    # Encrypt the message before storing it.
     encrypted_message = cipher_suite.encrypt(message.encode('utf-8')).decode('utf-8')
     conn = sqlite3.connect("messages.db")
     cursor = conn.cursor()
-    
     cursor.execute("INSERT INTO messages (sender, recipient, message) VALUES (?, ?, ?)", 
                    (sender, recipient, encrypted_message))
-    
     conn.commit()
     conn.close()
 
 def get_user_messages(username):
     conn = sqlite3.connect("messages.db")
     cursor = conn.cursor()
-
     cursor.execute("""
         SELECT sender, message, timestamp FROM messages
         WHERE recipient = ? OR recipient = 'ALL'
         ORDER BY timestamp DESC LIMIT 10
     """, (username,))
-
     messages = cursor.fetchall()
     conn.close()
-    # New: Decrypt messages before returning them.
+    # Decrypt messages before returning them.
     decrypted_messages = []
     for sender, encrypted_message, timestamp in messages:
         try:
@@ -110,6 +98,18 @@ def get_user_messages(username):
             decrypted_text = "[Error decrypting message]"
         decrypted_messages.append((sender, decrypted_text, timestamp))
     return decrypted_messages
+
+# Helper: read from socket until newline is encountered.
+def recv_line(sock):
+    line = b""
+    while True:
+        char = sock.recv(1)
+        if not char:
+            break
+        line += char
+        if char == b'\n':
+            break
+    return line 
 
 def handle_client(client_socket, client_address):
     username = None
@@ -120,10 +120,8 @@ def handle_client(client_socket, client_address):
         if choice == "register":
             client_socket.sendall("Enter a username: ".encode('utf-8'))
             username = client_socket.recv(1024).decode('utf-8').strip()
-
             client_socket.sendall("Enter a password: ".encode('utf-8'))
             password = client_socket.recv(1024).decode('utf-8').strip()
-
             if register_user(username, password):
                 client_socket.sendall("Registration successful! You can now login.\n".encode('utf-8'))
             else:
@@ -134,10 +132,8 @@ def handle_client(client_socket, client_address):
         elif choice == "login":
             client_socket.sendall("Enter your username: ".encode('utf-8'))
             username = client_socket.recv(1024).decode('utf-8').strip()
-
             client_socket.sendall("Enter your password: ".encode('utf-8'))
             password = client_socket.recv(1024).decode('utf-8').strip()
-
             if authenticate_user(username, password):
                 if semaphore.acquire(blocking=False):
                     client_socket.sendall(f"Welcome, {username}! Loading chat history...\n".encode('utf-8'))
@@ -164,7 +160,7 @@ def handle_client(client_socket, client_address):
                         client_socket.sendall(f"You are in position {pos} in the queue.\n".encode('utf-8'))
                         time.sleep(2)
                     
-                    semaphore.acquire() #bloacks until slot is free
+                    semaphore.acquire()
                     with waiting_lock:
                         if waiting_queue and waiting_queue[0][0] == username:
                             waiting_queue.pop(0)
@@ -183,23 +179,71 @@ def handle_client(client_socket, client_address):
             client_socket.close()
             return
 
-        ####################################Chat loop:####################################
+        # Chat loop:
         while True:
-            data = client_socket.recv(1024).decode('utf-8').strip()
+            # Use a fixed buffer to start reading.
+            data = client_socket.recv(1024)
             if not data:
                 break
 
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"Received from {username}: {data}")
-
-            if data.startswith("@"):
+            # Check if the data is a file transfer by testing the prefix in binary.
+            if data.startswith(b"/FILE"):
+                # Ensure the header line is fully received (terminated by newline)
+                if b'\n' in data:
+                    header, remainder = data.split(b'\n', 1)
+                else:
+                    header = data + recv_line(client_socket)
+                    remainder = b""
+                header = header.decode('utf-8').strip()
+                parts = header.split()
+                if len(parts) < 3:
+                    client_socket.sendall("Invalid file header.\n".encode('utf-8'))
+                    continue
+                filename = parts[1]
                 try:
-                    recipient, message = data.split(" ", 1)
-                    recipient = recipient[1:]
+                    filesize = int(parts[2])
+                except ValueError:
+                    client_socket.sendall("Invalid file size.\n".encode('utf-8'))
+                    continue
 
+                file_data = remainder
+                while len(file_data) < filesize:
+                    chunk = client_socket.recv(min(1024, filesize - len(file_data)))
+                    if not chunk:
+                        break
+                    file_data += chunk
+
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                notification = f"[{timestamp}] {username} sent a file: {filename}\n"
+                # Forward the file notification and data to all other clients.
+                for user, sock in list(clients.items()):
+                    if user != username:
+                        try:
+                            sock.sendall(notification.encode('utf-8'))
+                            # Send header with newline to delineate file header.
+                            file_header = f"/FILE {filename} {filesize}\n"
+                            sock.sendall(file_header.encode('utf-8'))
+                            sock.sendall(file_data)
+                        except Exception as e:
+                            print(f"Error sending file to {user}: {e}")
+                            del clients[user]
+                continue
+
+            # Otherwise, assume it's a normal text message.
+            try:
+                text = data.decode('utf-8').strip()
+            except UnicodeDecodeError:
+                text = ""
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"Received from {username}: {text}")
+
+            if text.startswith("@"):
+                try:
+                    recipient, msg = text.split(" ", 1)
+                    recipient = recipient[1:]
                     if recipient in clients:
-                        clients[recipient].sendall(f"[{timestamp}] {username}: {message}\n".encode('utf-8'))
-                        save_message(username, recipient, message)
+                        clients[recipient].sendall(f"[{timestamp}] {username}: {msg}\n".encode('utf-8'))
+                        save_message(username, recipient, msg)
                     else:
                         client_socket.sendall("Recipient not found.\n".encode('utf-8'))
                 except ValueError:
@@ -208,10 +252,11 @@ def handle_client(client_socket, client_address):
                 for user, sock in list(clients.items()):
                     if user != username:
                         try:
-                            sock.sendall(f"[{timestamp}] {username}: {data}\n".encode('utf-8'))
-                        except:
+                            sock.sendall(f"[{timestamp}] {username}: {text}\n".encode('utf-8'))
+                        except Exception as e:
+                            print(f"Error sending message to {user}: {e}")
                             del clients[user]
-                save_message(username, "ALL", data)
+                save_message(username, "ALL", text)
     except ConnectionResetError:
         print(f"User '{username}' disconnected unexpectedly.")
     except Exception as e:
