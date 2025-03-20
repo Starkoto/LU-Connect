@@ -66,7 +66,7 @@ class UI:
                 self.client_socket.close()
                 return
             if action == "register":
-                messagebox.showinfo("Success", "Registration successful! Please log in.")
+                messagebox.showinfo("Registered", "You can now log in.")
                 self.client_socket.close()
                 return
             self.username = username
@@ -92,7 +92,7 @@ class UI:
             allowed_extensions = ['.docx', '.pdf', '.jpeg']
             ext = os.path.splitext(filepath)[1].lower()
             if ext not in allowed_extensions:
-                messagebox.showerror("Error", "File type not allowed. Only .docx, .pdf, and .jpeg are permitted.")
+                messagebox.showerror("Error", "File type not allowed. Only .docx, .pdf, and .jpeg are allowed.")
                 return
             try:
                 with open(filepath, "rb") as f:
@@ -154,13 +154,9 @@ class UI:
                         self.text_area.config(state='disabled')
                         continue
                     filename = parts[1]
-                    try:
-                        filesize = int(parts[2])
-                    except ValueError:
-                        self.text_area.config(state='normal')
-                        self.text_area.insert(tk.END, "Received invalid file size.\n")
-                        self.text_area.config(state='disabled')
-                        continue
+                    
+                    filesize = int(parts[2])
+                    
 
                     file_data = remainder
                     while len(file_data) < filesize:
@@ -180,10 +176,7 @@ class UI:
                     self.play_notification()
                 else:
                     # Normal text message.
-                    try:
-                        text = data.decode('utf-8').strip()
-                    except UnicodeDecodeError:
-                        text = ""
+                    text = data.decode('utf-8').strip()
                     self.text_area.config(state='normal')
                     self.text_area.insert(tk.END, text + "\n")
                     self.text_area.config(state='disabled')
