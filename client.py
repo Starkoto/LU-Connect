@@ -82,7 +82,7 @@ class UI:
         message = self.message_entry.get().strip()
         if not message:
             return
-        # File transfer command: /sendfile <filepath>
+        # file transfer command: /sendfile <filepath>
         if message.startswith("/sendfile"):
             parts = message.split(maxsplit=1)
             if len(parts) < 2:
@@ -99,7 +99,6 @@ class UI:
                     file_data = f.read()
                 filesize = len(file_data)
                 filename = os.path.basename(filepath)
-                # Send file header with a newline to delineate it.
                 header = f"/FILE {filename} {filesize}\n"
                 self.client_socket.sendall(header.encode('utf-8'))
                 # Small delay to help separate header and binary data.
@@ -140,7 +139,6 @@ class UI:
                     break
                 # Check if this is a file transfer (binary data starts with /FILE)
                 if data.startswith(b"/FILE"):
-                    # Make sure we have the header terminated by newline.
                     if b'\n' in data:
                         header, remainder = data.split(b'\n', 1)
                     else:

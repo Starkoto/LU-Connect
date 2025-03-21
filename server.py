@@ -19,7 +19,7 @@ class ChatServer:
         # Create and bind the server socket.
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen()  # Allow more than MAX_CONNECTIONS to connect
+        self.server_socket.listen()
 
         # Initialize connection management objects.
         self.semaphore = threading.Semaphore(self.max_connections)
@@ -193,9 +193,8 @@ class ChatServer:
                 if not data:
                     break
 
-                # Check if the data is a file transfer by testing the prefix in binary.
+                # check if the data is a file transfer
                 if data.startswith(b"/FILE"):
-                    # Ensure the header line is fully received (terminated by newline)
                     if b'\n' in data:
                         header, remainder = data.split(b'\n', 1)
                     else:
@@ -218,7 +217,7 @@ class ChatServer:
 
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     notification = f"[{timestamp}] {username} sent a file: {filename}\n"
-                    # Forward the file notification and data to all other clients.
+                    #forward the file notification and data to all other clients.
                     for user, sock in list(self.clients.items()):
                         if user != username:
                             try:
@@ -231,7 +230,7 @@ class ChatServer:
                                 del self.clients[user]
                     continue
 
-                # Otherwise, assume it's a normal text message.
+                # otherwise, assume it's a normal text message.
                 try:
                     text = data.decode('utf-8').strip()
                 except UnicodeDecodeError:
