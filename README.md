@@ -16,7 +16,6 @@ A secure, real‑time chat app built in Python that supports user authentication
 
 - **Operating System:** Windows (due to the winsound library used for sound notifications)
 - **Python Version:** Python 3.8+
-- **Dependencies:** All required libraries are listed in `requirements.txt`.
 
 ## Usage
 
